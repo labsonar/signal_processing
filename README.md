@@ -3,11 +3,12 @@ This project is a basic Python library to promote uniformity and centralization 
 
 ## Authors
 - **Developer**: [Fábio Oliveira](https://github.com/obs-fabio)
+- **Developer**: [Gabriel Lisboa](https://github.com/gabrielhblisboa)
 - **Advisor**: [Natanael Junior](https://github.com/natmourajr/natmourajr)
 
 ## Repository Structure
 
-The following directory structure is recommended for library development:
+The library has the following directory structure:
 
 - **src/**: Contains the core Python code that forms the pip package.
 - **unit_test/**: Contains simple scripts for unit testing, enabling focused validation of individual features within the package.
