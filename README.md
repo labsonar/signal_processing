@@ -43,6 +43,10 @@ To generate the pip package as a .tar.gz file, navigate to the `src` directory a
 python setup.py sdist bdist_wheel
 ```
 
+### LPS Libraries Dependence
+This library depends on:
+- [Utils](https://github.com/labsonar/utils)
+
 ## License
 
 This project is licensed under the Creative Commons Attribution-NonCommercial-ShareAlike (CC BY-NC-SA) license. You are free to use, modify, and distribute the code for non-commercial purposes, with the condition that you provide attribution to the authors and distribute any derivative works under the same license. For more details, please refer to the license file (LICENSE.md) included in this repository.
