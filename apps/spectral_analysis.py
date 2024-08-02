@@ -27,7 +27,8 @@ import lps_sp.acoustical_analysis as lps_analysis
 
 def main(analysis: lps_analysis.SpectralAnalysis,
          filename: str,
-         params: lps_analysis.Parameters = lps_analysis.Parameters()) -> None:
+         params: lps_analysis.Parameters = lps_analysis.Parameters(),
+         integration: lps_analysis.TimeIntegration = None) -> None:
     """
     Perform spectral analysis on an audio file and save the result as an image.
 
@@ -36,11 +37,15 @@ def main(analysis: lps_analysis.SpectralAnalysis,
         filename (str): The path to the audio file to analyze.
         params (lps_analysis.Parameters, optional): Parameters for the spectral analysis.
             Defaults to lps_analysis.Parameters().
+        integration (lps_analysis.TimeIntegration, optional): Time integration.
+            Defaults to None.
     """
 
     fs, data = scipy_wav.read(filename)
 
     power, freq, time = analysis.apply(data=data, fs=fs, params=params)
+    if integration is not None:
+        power, freq, time = integration.apply(power, freq, time)
 
     output_file = os.path.splitext(filename)[0] + f'_{analysis}.png'
 
@@ -64,6 +69,7 @@ if __name__ == "__main__":
     parser.add_argument('filename', type=str,
                         help='Path to the audio file to analyze')
 
+    # lps_analysis.Parameters arguments
     parser.add_argument('--n_spectral_pts', type=int, default=1024,
                         help='Number of points for spectral analysis (default: 1024)')
     parser.add_argument('--overlap', type=float, default=0,
@@ -75,6 +81,13 @@ if __name__ == "__main__":
     parser.add_argument('--log_scale', type=bool, default=True,
                         help='Apply log scale to the result (default: True)')
 
+    # lps_analysis.TimeIntegration arguments
+    parser.add_argument('--integration_interval', type=float, default=None,
+                        help='Interval for time integration (in seconds or samples (default))')
+    parser.add_argument('--integration_overlap', type=float, default=0,
+                        help='Overlap for time integration (in seconds or samples (default)')
+    parser.add_argument('--in_seconds', action='store_true',
+                        help='Specify if the integration interval and overlap are in seconds')
 
     args = parser.parse_args()
 
@@ -86,6 +99,8 @@ if __name__ == "__main__":
             n_mels=args.n_mels,
             decimation_rate=args.decimation_rate,
             log_scale=args.log_scale
-        )
-
-)
+        ),
+        integration = None if args.integration_interval is None else
+                lps_analysis.TimeIntegration(integration_interval=args.integration_interval,
+                        integration_overlap=args.integration_overlap,
+                        in_seconds=args.in_seconds))

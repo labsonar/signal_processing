@@ -228,3 +228,93 @@ class SpectralAnalysis(enum.Enum):
         step_time = hop_length/fs
         times = [start_time + step_time * valor for valor in range(power.shape[1])]
         return power, freqs, times
+
+
+class TimeIntegration():
+    """ Class for applying time integration to a power spectrum over a given interval. """
+
+    def __init__(self,
+                 in_seconds: bool,
+                integration_interval: typing.Union[int, float],
+                integration_overlap: typing.Union[int, float] = 0) -> None:
+        """
+        Args:
+            in_seconds (bool): If True, `integration_interval` and `integration_overlap` are
+                interpreted as seconds. Othewise, they are interpreted as number of samples.
+            integration_interval (float): Interval for integration.
+            integration_overlap (float, optional): Overlap between intervals. Defaults to 0.
+        """
+        self.in_seconds = in_seconds
+        self.integration_interval = integration_interval
+        self.integration_overlap = integration_overlap
+
+    @staticmethod
+    def from_samples(integration_interval_samples: int,
+                     integration_overlap_samples: int = 0) -> 'TimeIntegration':
+        """
+        Named constructor for creating a TimeIntegration instance with sample-based parameters.
+
+        Args:
+            integration_interval_samples (int, optional): Interval in samples for integration.
+            integration_overlap_samples (int, optional): Overlap in samples between intervals.
+                Defaults to 0.
+
+        Returns:
+            TimeIntegration: An instance of TimeIntegration initialized with sample-based
+                parameters.
+        """
+        return TimeIntegration(in_seconds = True,
+                               integration_interval = integration_interval_samples,
+                               integration_overlap = integration_overlap_samples)
+
+    @staticmethod
+    def from_seconds(integration_interval: float,
+                     integration_overlap: float = 0) -> 'TimeIntegration':
+        """
+        Named constructor for creating a TimeIntegration instance with time-based parameters.
+
+        Args:
+            integration_interval (float, optional): Interval in seconds for integration.
+            integration_overlap (float, optional): Overlap in seconds between intervals.
+                Defaults to 0.
+
+        Returns:
+            TimeIntegration: An instance of TimeIntegration initialized with time-based parameters.
+        """
+        return TimeIntegration(in_seconds = False,
+                               integration_interval = integration_interval,
+                               integration_overlap = integration_overlap)
+
+    def apply(self, power: np.array, freq: np.array, time: np.array) -> \
+            typing.Tuple[np.array, np.array, np.array]:
+        """
+        Apply time integration to the power spectrum.
+
+        Args:
+            power (np.array): 2D array of power spectrum data with shape (n_freqs, n_times).
+            freq (np.array): 1D array of frequency values corresponding to the rows of `power`.
+            time (np.array): 1D array of time values corresponding to the columns of `power`.
+
+        Returns:
+            typing.Tuple[np.array, np.array, np.array]: A tuple containing:
+                - 2D array of integrated power spectrum with shape (n_freqs, n_final_times).
+                - 1D array of frequency values (same as input).
+                - 1D array of integrated time values.
+        """
+        delta_t = time[-1] - time[-2]
+        if self.in_seconds:
+            n_means = int(np.round(self.integration_interval / delta_t))
+            n_overlap = int(np.round(self.integration_interval - self.integration_overlap/ delta_t))
+        else:
+            n_means = self.integration_interval
+            n_overlap = self.integration_overlap
+
+        final_power = []
+        final_times = []
+
+        for i in range(0, len(time), n_overlap):
+            mean_spectrum = np.mean(power[:, i:i+n_means], axis=1)
+            final_power.append(mean_spectrum)
+            final_times.append(time[i])
+
+        return np.array(final_power).T, freq, final_times
