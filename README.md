@@ -1,5 +1,5 @@
 ## Introduction
-This project is a basic Python library to promote uniformity and centralization within the LabSonar/LPS for acoustical signal processing. 
+This project is a basic Python library to promote uniformity and centralization within the LabSonar/LPS for acoustical signal processing.
 
 ## Authors
 - **Developer**: [Fábio Oliveira](https://github.com/obs-fabio)

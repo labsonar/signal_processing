@@ -10,15 +10,10 @@ Tests:
     test_bb: Tests the broadband noise generation and PSD calculation, ensuring that the 
              generated noise spectrum matches the desired spectrum.
 
-Usage:
-    This module is intended to be used with a test runner such as unittest. It verifies the
-    accuracy and correctness of PSD calculations and noise generation functions from the 
-    `lps_sp.acoustical.broadband`.
-
 Example:
     To run the tests, execute the following command:
     
-        python -m unittest <name_of_this_file>.py
+        python -m unittest broadband_test.py
 """
 import unittest
 import numpy as np
@@ -31,14 +26,13 @@ class TestBroadband(unittest.TestCase):
 
     def setUp(self):
         """Set up the test commom configurations."""
+        lps_utils.set_seed()
         self.fs = 48000
         self.duration = 1
         self.t = np.linspace(0, self.duration, int(self.fs * self.duration), endpoint=False)
 
     def test_white_noise(self):
         """Test PSD calculation for white noise."""
-        lps_utils.set_seed()
-
         desired_psd = 1
 
         # Generating a white noise (gaussian noise) with psd 1 V**2/Hz
@@ -59,7 +53,6 @@ class TestBroadband(unittest.TestCase):
     def test_sin(self):
         """Test PSD calculation for sin wave."""
         # based on https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.welch.html
-        lps_utils.set_seed()
 
         desired_sin_rms = 10
         desired_bg = 0.001
@@ -105,7 +98,6 @@ class TestBroadband(unittest.TestCase):
         signal = lps_bb.generate(frequencies, desired_spectrum, len(self.t), self.fs)
 
         freqs, psd_values = lps_bb.psd(signal=signal, fs=self.fs)
-
 
         min_index = next(i for i, f in enumerate(freqs) if f >= f_test_min)
         max_index = next(i for i, f in enumerate(freqs) if f >= f_test_max)
