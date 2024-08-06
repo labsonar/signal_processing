@@ -14,7 +14,7 @@ import lps_sp.acoustical.broadband as lps_bb
 def main():
     """This script generate a wav and a plot, showing the sinthetic PSD vs the designed PSD.."""
 
-    base_dir = "./test_results"
+    base_dir = "./results"
     os.makedirs(base_dir, exist_ok = True)
 
     # Set parameters for synthetic noise generation

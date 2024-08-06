@@ -51,7 +51,6 @@ class TestSimilarityMeasures(unittest.TestCase):
 
     def test_dissimilaties(self):
         """ Test all dissimilarity measures. """
-        # Test DissimilarityMeasure
 
         for measure in lps_pdf.DissimilarityMeasure:
             # distance between equals distribuitions near to zero
