@@ -3,6 +3,7 @@ Acoustical Signal Module
 
 This module contains functions for generating and evaluate broadband signals.
 """
+import enum
 import typing
 import numpy as np
 import scipy.signal as scipy
@@ -149,3 +150,67 @@ def psd(signal: np.array, fs: float, window_size: int = 1024, overlap: typing.Un
 
     # Removing DC component
     return freqs[1:], intensity[1:]
+
+class ColoredNoises(enum.Enum):
+    """ Enum class to represent and generate colored noises. """
+    WHITE = 0
+    PINK = 1
+    BROWN = 2
+    BLUE = 3
+    VIOLET = 4
+
+    def __str__(self):
+        return str(self.name).rsplit('.', maxsplit=1)[-1].lower() + "_noise"
+
+    def to_psd(self, fs: float = 48000, ref_db: float = 50):
+        """
+        Get the Power Spectral Density (PSD) for the selected colored noise.
+
+        Args:
+            fs (float, optional): The sampling frequency in Hz. Defaults to 48,000 Hz.
+            ref_db (float, optional): The reference level in dB. Defaults to 50 dB.
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray]:
+                - Frequencies in Hz.
+                - PSD estimates in dB.
+
+        Raises:
+            ValueError: If an unsupported noise type is selected.
+        """
+
+        ref_freq = 1
+        frequencies = np.logspace(np.log10(ref_freq), np.log10(fs / 2), num=100)
+
+        if self == ColoredNoises.WHITE:
+            gain_per_octave = 0
+        elif self == ColoredNoises.PINK:
+            gain_per_octave = -3
+        elif self == ColoredNoises.BROWN:
+            gain_per_octave = -6
+        elif self == ColoredNoises.BLUE:
+            gain_per_octave = +3
+        elif self == ColoredNoises.VIOLET:
+            gain_per_octave = +6
+
+        else:
+            raise NotImplementedError(f"Unsupported noise type: {self}")
+
+        intensities = ref_db + gain_per_octave * np.log2(frequencies/ref_freq)
+
+        return frequencies, intensities
+
+    def generate(self, n_samples: int, fs: float = 48000, ref_db: float = 50):
+        """
+        Get samples for the selected colored noise.
+
+        Args:
+            n_samples (int): Number of samples to generate.
+            fs (float, optional): The sampling frequency in Hz. Defaults to 48,000 Hz.
+            ref_db (float, optional): The reference level in dB. Defaults to 50 dB.
+
+        Returns:
+            np.array: Generated broadband noise in μPa.
+        """
+        frequencies, intensities = self.to_psd(fs=fs, ref_db=ref_db)
+        return generate(frequencies=frequencies, psd_db=intensities, n_samples=n_samples, fs=fs)
