@@ -5,7 +5,16 @@ import typing
 import numpy as np
 
 class ZScoreDetector:
-    """ Class to represent a z-score anomaly detector. """
+    """
+    This class represents a Z-score anomaly detector.
+
+    For each normalization_step, the median value of the samples is calculated and then converted
+    into a Z-score using the last estimation_window_size samples. Specifically, the standard
+    deviation and mean of the last estimation_window_size samples are estimated, and the median
+    value from the normalization_step samples is then subtracted from the mean and divided by the
+    standard deviation. Any signal that achieves a Z-score higher than the specified threshold
+    is identified as an anomaly.
+    """
 
     def __init__(self, estimation_window_size: int, normalization_step: int = 1):
         """
@@ -18,13 +27,16 @@ class ZScoreDetector:
         self.estimation_window_size = estimation_window_size
         self.normalization_step = normalization_step
 
-    def detect(self, input_data: np.array, threshold: float = 3) -> np.array:
+    def detect(self, input_data: np.array, threshold: float = 3, board_only: bool = True) -> \
+            np.array:
         """
         Perform Z-score based anomaly detector on the given data.
 
         Parameters:
         - input_data (np.array): The input data array for detection.
         - threshold (float, optional): The Z-score threshold to detect anomalies (default is 3.0).
+        - board_only (bool, optional): The detect anomalies are identified only when transitioning
+            from non-anomaly to anomaly. The consecutive anomalies are discarted (default is True).
 
         Returns:
         - np.array: An array of indices (center of the analysis window) where anomalies are
@@ -52,10 +64,11 @@ class ZScoreDetector:
 
         anomalies = np.array(anomalies)
 
-        if len(anomalies) > 1:
-            diffs = np.diff(anomalies)
-            to_keep = np.insert(diffs > self.normalization_step, 0, True)
-            anomalies = anomalies[to_keep]
+        if board_only:
+            if len(anomalies) > 1:
+                diffs = np.diff(anomalies)
+                to_keep = np.insert(diffs > self.normalization_step, 0, True)
+                anomalies = anomalies[to_keep]
 
         return anomalies
 

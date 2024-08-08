@@ -37,24 +37,39 @@ def generate(frequencies: np.array, psd_db: np.array, n_samples: int, fs: float)
             frequencies = frequencies[:index]
             psd_db = psd_db[:index]
         else:
-            f = fs / 2
-            i = psd_db[index - 1] + (psd_db[index] - psd_db[index - 1]) * (
-                        f - frequencies[index - 1]) / (frequencies[index] - frequencies[index - 1])
 
-            frequencies = np.append(frequencies[:index], f)
+            lf_min = np.log10(frequencies[index - 1])
+            lf_h = np.log10(fs / 2)
+            lf_max = np.log10(frequencies[index])
+
+            gain_per_decade = (psd_db[index] - psd_db[index - 1])/(lf_max-lf_min)
+
+            i = psd_db[index - 1] + gain_per_decade * (lf_h-lf_min)
+
+            frequencies = np.append(frequencies[:index], fs/2)
             psd_db = np.append(psd_db[:index], i)
     else:
         if frequencies[-1] != (fs / 2):
-            f = fs / 2
-            i = psd_db[-1] + (psd_db[-1] - psd_db[-2]) * (f - frequencies[-2]) / (
-                        frequencies[-1] - frequencies[-2])
 
-            frequencies = np.append(frequencies, f)
-            psd_db = np.append(psd_db, i)
+            lf_min = np.log10(frequencies[-2])
+            lf_max = np.log10(frequencies[-1])
+            lf_h = np.log10(fs / 2)
+
+            gain_per_decade = (psd_db[-1] - psd_db[-2])/(lf_max-lf_min)
+
+            i = psd_db[-1] + gain_per_decade * (lf_h-lf_max)
+
+            frequencies = np.append(frequencies[:-1], fs/2)
+            psd_db = np.append(psd_db[:-1], i)
+
 
     if frequencies[0] != 0:
         frequencies = np.append(0, frequencies)
-        psd_db = np.append(psd_db[0], psd_db)
+
+        if psd_db[0] < psd_db[1]:
+            psd_db = np.append(0, psd_db)
+        else:
+            psd_db = np.append(psd_db[0], psd_db)
 
 
     psd_linear = 10 ** ((psd_db) / 20)  # Convert dB to linear scale
