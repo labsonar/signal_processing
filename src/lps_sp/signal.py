@@ -132,3 +132,6 @@ class Normalization(enum.Enum):
     def __call__(self, data: np.array) -> np.array:
         """ Function to implicitly normalize data by calling apply. """
         return self.apply(data)
+
+    def __str__(self):
+        return super().__str__().split(".")[-1].replace("_", " ").title()
