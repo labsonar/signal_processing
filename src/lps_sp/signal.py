@@ -135,6 +135,9 @@ class Normalization(enum.Enum):
         """ Function to implicitly normalize data by calling apply. """
         return self.apply(data)
 
+    def __str__(self):
+        return super().__str__().split(".")[-1].replace("_", " ").title()
+
 def save_normalized_wav(signal: np.ndarray,
                         fs: typing.Union[int, lps_qty.Frequency],
                         filename: str) -> None:
