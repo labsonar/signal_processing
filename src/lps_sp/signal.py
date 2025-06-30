@@ -8,6 +8,9 @@ import typing
 
 import numpy as np
 import scipy.signal as scipy
+import scipy.io.wavfile as wavfile
+
+import lps_utils.quantities as lps_qty
 
 
 def decimate(data: np.array, decimation_rate: typing.Union[int, float]) -> np.array:
@@ -16,7 +19,7 @@ def decimate(data: np.array, decimation_rate: typing.Union[int, float]) -> np.ar
 
     Args:
         data (np.ndarray): Input data.
-        decimation_rate (typing.Union[int, float]): Decimation rate. 
+        decimation_rate (typing.Union[int, float]): Decimation rate.
             Supports both integer and float values (equivalent to scipy.decimate if int)
 
     Returns:
@@ -85,7 +88,6 @@ def tpsw(data: np.array, n: int = None, p: int = None, a: int = None) -> np.arra
         (np.matmul(np.flipud(mult),np.ones((1,data.shape[1]))))
     return mx
 
-
 class Normalization(enum.Enum):
     """ Enum class representing the available normalizations in this module. """
     MIN_MAX = 0
@@ -132,3 +134,19 @@ class Normalization(enum.Enum):
     def __call__(self, data: np.array) -> np.array:
         """ Function to implicitly normalize data by calling apply. """
         return self.apply(data)
+
+def save_normalized_wav(signal: np.ndarray,
+                        fs: typing.Union[int, lps_qty.Frequency],
+                        filename: str) -> None:
+    """Export a .wav file
+
+    Args:
+        signal (np.ndarray): Signal to be normalized and exported
+        fs (int, lps_qty.Frequency): Sample Frequency
+        filename (str): Filename
+    """
+    if isinstance(fs, lps_qty.Frequency):
+        fs = int(fs.get_hz())
+    normalized = Normalization.MIN_MAX_ZERO_CENTERED(signal)
+    wav_signal = (normalized * 32767).astype(np.int16)
+    wavfile.write(filename, fs, wav_signal)
