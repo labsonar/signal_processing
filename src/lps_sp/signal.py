@@ -31,6 +31,8 @@ def decimate(data: np.array, decimation_rate: typing.Union[int, float]) -> np.ar
     b, a = scipy.cheby1(8, 0.05, 0.8 / decimation_rate, btype='low')
     y = scipy.filtfilt(b, a, data)
     return scipy.resample(y, int(len(y) / decimation_rate))
+    # TODO verificar se interpolação circular gera problemas e usar a interpolação linear abaixo
+    # return scipy.resample_poly(y, int(len(y) / decimation_rate), decimation_rate)
 
 def tpsw(data: np.array, n: int = None, p: int = None, a: int = None) -> np.array:
     """Perform TPSW data calculation
@@ -148,8 +150,23 @@ def save_normalized_wav(signal: np.ndarray,
         fs (int, lps_qty.Frequency): Sample Frequency
         filename (str): Filename
     """
+    normalized = Normalization.MIN_MAX_ZERO_CENTERED(signal)
+    norm_signal = (normalized * 32767).astype(np.int16)
+    save_wav(norm_signal, fs, filename)
+
+def save_wav(signal: np.ndarray[np.integer],
+             fs: typing.Union[int, lps_qty.Frequency],
+             filename: str) -> None:
+    """Export a .wav file
+
+    Args:
+        signal (np.ndarray): Signal to be normalized and exported
+        fs (int, lps_qty.Frequency): Sample Frequency
+        filename (str): Filename
+    """
+    if np.issubdtype(signal.dtype, np.floating):
+        return save_normalized_wav(signal, fs, filename)
+
     if isinstance(fs, lps_qty.Frequency):
         fs = int(fs.get_hz())
-    normalized = Normalization.MIN_MAX_ZERO_CENTERED(signal)
-    wav_signal = (normalized * 32767).astype(np.int16)
-    wavfile.write(filename, fs, wav_signal)
+    wavfile.write(filename, fs, signal)

@@ -7,9 +7,13 @@ import enum
 import typing
 import numpy as np
 import scipy.signal as scipy
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
 
+import lps_utils.quantities as lps_qty
 
-def generate(frequencies: np.array, psd_db: np.array, n_samples: int, fs: float) -> np.array:
+def generate(frequencies: np.array, psd_db: np.array, n_samples: int,
+             fs: float, seed: int = None) -> np.array:
     """Generate broadband noise based on frequency and intensity information.
 
     Args:
@@ -86,8 +90,9 @@ def generate(frequencies: np.array, psd_db: np.array, n_samples: int, fs: float)
     #       std = √P
     std_dev = np.sqrt(max_power)
 
+    rng = np.random.default_rng(seed = seed)
     order = 1025
-    noise = np.random.normal(0, std_dev, n_samples + order)
+    noise = rng.normal(0, std_dev, n_samples + order)
     # Generate more samples to eliminate filter transient response
 
 
@@ -109,8 +114,12 @@ def generate(frequencies: np.array, psd_db: np.array, n_samples: int, fs: float)
     out_noise = scipy.lfilter(coeficient, 1, noise)
     return out_noise[order:]
 
-def psd(signal: np.array, fs: float, window_size: int = 1024, overlap: typing.Union[int, float] = 0,
-        window: str = 'hann', db_unity = True) -> typing.Tuple[np.array, np.array]:
+def psd(signal: np.array,
+        fs: typing.Union[float, lps_qty.Frequency],
+        window_size: int = 1024,
+        overlap: typing.Union[int, float] = 0,
+        window: str = 'hann',
+        db_unity = True) -> typing.Tuple[np.array, np.array]:
     """Estimate the power spectrum density (PSD) for input signal.
 
     Args:
@@ -129,6 +138,9 @@ def psd(signal: np.array, fs: float, window_size: int = 1024, overlap: typing.Un
     """
     # https://ieeexplore.ieee.org/document/1161901
     # http://resource.npl.co.uk/acoustics/techguides/concepts/siunits.html
+
+    if isinstance(fs, lps_qty.Frequency):
+        fs = fs.get_hz()
 
     if isinstance(overlap, float):
         if overlap < 0 or overlap >= 1:
@@ -150,6 +162,53 @@ def psd(signal: np.array, fs: float, window_size: int = 1024, overlap: typing.Un
 
     # Removing DC component
     return freqs[1:], intensity[1:]
+
+def plot_psd(filename: str, noise: np.array, fs: lps_qty.Frequency)-> None:
+    """
+    Plots and saves the Power Spectral Density (PSD) of a single noise signal.
+
+    Parameters:
+        filename (str): The path to save the resulting PSD plot image.
+        noise (np.array): The input noise signal as a 1D NumPy array.
+        fs (lps_qty.Frequency): Sampling frequency of the signal.
+    """
+
+    plt.figure(figsize=(10, 6))
+    f_bb, i_bb = psd(noise, fs=fs)
+    plt.plot(f_bb, i_bb)
+    plt.xlabel("Frequency [Hz]")
+    plt.ylabel("PSD [dB]")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(filename)
+    plt.close()
+
+def plot_psds(filename: str,
+              noises: typing.List[np.array],
+              labels: typing.List[str],
+              fs: lps_qty.Frequency)-> None:
+    """
+    Plots and saves the Power Spectral Density (PSD) curves of multiple noise signals.
+
+    Parameters:
+        filename (str): The path to save the resulting PSD plot image.
+        noises (List[np.array]): A list of 1D NumPy arrays, each representing a noise signal.
+        labels (List[str]): A list of labels corresponding to each noise signal.
+        fs (lps_qty.Frequency): Sampling frequency of the signals.
+    """
+
+    plt.figure(figsize=(10, 6))
+    cmap = cm.get_cmap("viridis", min(len(noises), len(labels)))
+    for i, (noise, label) in enumerate(zip(noises, labels)):
+        f_bb, i_bb = psd(noise, fs=fs.get_hz())
+        plt.plot(f_bb, i_bb, label=label, color=cmap(i))
+    plt.xlabel("Frequency [Hz]")
+    plt.ylabel("PSD [dB]")
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(filename)
+    plt.close()
 
 class ColoredNoises(enum.Enum):
     """ Enum class to represent and generate colored noises. """

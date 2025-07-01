@@ -9,8 +9,11 @@ import typing
 import numpy as np
 import scipy.signal as scipy
 import librosa
+import matplotlib.pyplot as plt
+import matplotlib.colors as color
 
 import lps_sp.signal as lps_signal
+import lps_utils.prefered_number as lps_pn
 
 
 class Parameters():
@@ -87,6 +90,95 @@ class Parameters():
             return np.floor(self.get_fft_size() * self.overlap)
 
         return self.overlap * 2
+
+class TimeIntegration():
+    """ Class for applying time integration to a power spectrum over a given interval. """
+
+    def __init__(self,
+                 in_seconds: bool,
+                integration_interval: typing.Union[int, float],
+                integration_overlap: typing.Union[int, float] = 0) -> None:
+        """
+        Args:
+            in_seconds (bool): If True, `integration_interval` and `integration_overlap` are
+                interpreted as seconds. Othewise, they are interpreted as number of samples.
+            integration_interval (float): Interval for integration.
+            integration_overlap (float, optional): Overlap between intervals. Defaults to 0.
+        """
+        self.in_seconds = in_seconds
+        self.integration_interval = integration_interval
+        self.integration_overlap = integration_overlap
+
+    @staticmethod
+    def from_samples(integration_interval_samples: int,
+                     integration_overlap_samples: int = 0) -> 'TimeIntegration':
+        """
+        Named constructor for creating a TimeIntegration instance with sample-based parameters.
+
+        Args:
+            integration_interval_samples (int, optional): Interval in samples for integration.
+            integration_overlap_samples (int, optional): Overlap in samples between intervals.
+                Defaults to 0.
+
+        Returns:
+            TimeIntegration: An instance of TimeIntegration initialized with sample-based
+                parameters.
+        """
+        return TimeIntegration(in_seconds = True,
+                               integration_interval = integration_interval_samples,
+                               integration_overlap = integration_overlap_samples)
+
+    @staticmethod
+    def from_seconds(integration_interval: float,
+                     integration_overlap: float = 0) -> 'TimeIntegration':
+        """
+        Named constructor for creating a TimeIntegration instance with time-based parameters.
+
+        Args:
+            integration_interval (float, optional): Interval in seconds for integration.
+            integration_overlap (float, optional): Overlap in seconds between intervals.
+                Defaults to 0.
+
+        Returns:
+            TimeIntegration: An instance of TimeIntegration initialized with time-based parameters.
+        """
+        return TimeIntegration(in_seconds = False,
+                               integration_interval = integration_interval,
+                               integration_overlap = integration_overlap)
+
+    def apply(self, power: np.array, freq: np.array, time: np.array) -> \
+            typing.Tuple[np.array, np.array, np.array]:
+        """
+        Apply time integration to the power spectrum.
+
+        Args:
+            power (np.array): 2D array of power spectrum data with shape (n_freqs, n_times).
+            freq (np.array): 1D array of frequency values corresponding to the rows of `power`.
+            time (np.array): 1D array of time values corresponding to the columns of `power`.
+
+        Returns:
+            typing.Tuple[np.array, np.array, np.array]: A tuple containing:
+                - 2D array of integrated power spectrum with shape (n_freqs, n_final_times).
+                - 1D array of frequency values (same as input).
+                - 1D array of integrated time values.
+        """
+        delta_t = time[-1] - time[-2]
+        if self.in_seconds:
+            n_means = int(np.round(self.integration_interval / delta_t))
+            n_overlap = int(np.round((self.integration_interval - self.integration_overlap)/ delta_t))
+        else:
+            n_means = self.integration_interval
+            n_overlap = self.integration_overlap
+
+        final_power = []
+        final_times = []
+
+        for i in range(0, len(time), n_overlap):
+            mean_spectrum = np.mean(power[:, i:i+n_means], axis=1)
+            final_power.append(mean_spectrum)
+            final_times.append(time[i])
+
+        return np.array(final_power).T, np.array(freq), np.array(final_times)
 
 
 class SpectralAnalysis(enum.Enum):
@@ -229,92 +321,78 @@ class SpectralAnalysis(enum.Enum):
         times = [start_time + step_time * valor for valor in range(power.shape[1])]
         return power, freqs, times
 
-
-class TimeIntegration():
-    """ Class for applying time integration to a power spectrum over a given interval. """
-
-    def __init__(self,
-                 in_seconds: bool,
-                integration_interval: typing.Union[int, float],
-                integration_overlap: typing.Union[int, float] = 0) -> None:
+    def plot(self,
+             filename: str,
+             data: np.array,
+             fs: float,
+             params: Parameters = Parameters(),
+             integration: TimeIntegration = None,
+             normalization: lps_signal.Normalization = lps_signal.Normalization.NORM_L2,
+             frequency_limit: float = None,
+             frequency_in_x_axis: bool = False,
+             colormap: color.Colormap = plt.get_cmap('jet')):
         """
-        Args:
-            in_seconds (bool): If True, `integration_interval` and `integration_overlap` are
-                interpreted as seconds. Othewise, they are interpreted as number of samples.
-            integration_interval (float): Interval for integration.
-            integration_overlap (float, optional): Overlap between intervals. Defaults to 0.
-        """
-        self.in_seconds = in_seconds
-        self.integration_interval = integration_interval
-        self.integration_overlap = integration_overlap
-
-    @staticmethod
-    def from_samples(integration_interval_samples: int,
-                     integration_overlap_samples: int = 0) -> 'TimeIntegration':
-        """
-        Named constructor for creating a TimeIntegration instance with sample-based parameters.
+        Process data with spectral analysis and plot the power spectrum.
 
         Args:
-            integration_interval_samples (int, optional): Interval in samples for integration.
-            integration_overlap_samples (int, optional): Overlap in samples between intervals.
-                Defaults to 0.
+            data (np.array): Input time-domain signal.
+            fs (float): Sampling frequency.
+            params (Parameters): Parameters for spectral analysis.
+            integration (TimeIntegration, optional): Time integration object. Defaults to None.
+            normalization (Normalization, optional): Normalization function. Defaults to NORM_L2.
+            frequency_limit (float, optional): Max frequency to display. Defaults to None.
+            frequency_in_x_axis (bool, optional): If True, frequency is x-axis, time y-axis.
+                Defaults to False.
+            colormap (Colormap, optional): Matplotlib colormap for the image. Defaults to 'jet'.
 
         Returns:
-            TimeIntegration: An instance of TimeIntegration initialized with sample-based
-                parameters.
+            None
         """
-        return TimeIntegration(in_seconds = True,
-                               integration_interval = integration_interval_samples,
-                               integration_overlap = integration_overlap_samples)
+        power, freqs, times = self.apply(data, fs, params)
 
-    @staticmethod
-    def from_seconds(integration_interval: float,
-                     integration_overlap: float = 0) -> 'TimeIntegration':
-        """
-        Named constructor for creating a TimeIntegration instance with time-based parameters.
+        if integration is not None:
+            power, freqs, times = integration.apply(power, freqs, times)
 
-        Args:
-            integration_interval (float, optional): Interval in seconds for integration.
-            integration_overlap (float, optional): Overlap in seconds between intervals.
-                Defaults to 0.
+        if frequency_limit is not None:
+            index_limit = next((i for i, freq in enumerate(freqs) if freq > frequency_limit),
+                               len(freqs))
+            freqs = freqs[:index_limit]
+            power = power[:index_limit, :]
 
-        Returns:
-            TimeIntegration: An instance of TimeIntegration initialized with time-based parameters.
-        """
-        return TimeIntegration(in_seconds = False,
-                               integration_interval = integration_interval,
-                               integration_overlap = integration_overlap)
+        if normalization is not None:
+            power = normalization(power)
 
-    def apply(self, power: np.array, freq: np.array, time: np.array) -> \
-            typing.Tuple[np.array, np.array, np.array]:
-        """
-        Apply time integration to the power spectrum.
+        if frequency_in_x_axis:
+            power = power.T
 
-        Args:
-            power (np.array): 2D array of power spectrum data with shape (n_freqs, n_times).
-            freq (np.array): 1D array of frequency values corresponding to the rows of `power`.
-            time (np.array): 1D array of time values corresponding to the columns of `power`.
+        n_ticks = 5
+        time_labels = [lps_pn.get_engineering_notation(times[i], "s")
+                    for i in np.linspace(0, len(times) - 1, num=n_ticks, dtype=int)]
+        frequency_labels = [lps_pn.get_engineering_notation(freqs[i], "Hz")
+                            for i in np.linspace(0, len(freqs) - 1, num=n_ticks, dtype=int)]
 
-        Returns:
-            typing.Tuple[np.array, np.array, np.array]: A tuple containing:
-                - 2D array of integrated power spectrum with shape (n_freqs, n_final_times).
-                - 1D array of frequency values (same as input).
-                - 1D array of integrated time values.
-        """
-        delta_t = time[-1] - time[-2]
-        if self.in_seconds:
-            n_means = int(np.round(self.integration_interval / delta_t))
-            n_overlap = int(np.round(self.integration_interval - self.integration_overlap/ delta_t))
+        time_ticks = [(x / 4 * (len(times) - 1)) for x in range(n_ticks)]
+        frequency_ticks = [(y / 4 * (len(freqs) - 1)) for y in range(n_ticks)]
+
+        plt.figure()
+        plt.imshow(power, aspect='auto', origin='lower', cmap=colormap)
+        plt.colorbar()
+
+        if frequency_in_x_axis:
+            plt.ylabel('Time (s)')
+            plt.xlabel('Frequency (Hz)')
+            plt.yticks(time_ticks)
+            plt.gca().set_yticklabels(time_labels)
+            plt.xticks(frequency_ticks)
+            plt.gca().set_xticklabels(frequency_labels)
+            plt.gca().invert_yaxis()
         else:
-            n_means = self.integration_interval
-            n_overlap = self.integration_overlap
+            plt.xlabel('Time (s)')
+            plt.ylabel('Frequency (Hz)')
+            plt.xticks(time_ticks)
+            plt.gca().set_xticklabels(time_labels)
+            plt.yticks(frequency_ticks)
+            plt.gca().set_yticklabels(frequency_labels)
 
-        final_power = []
-        final_times = []
-
-        for i in range(0, len(time), n_overlap):
-            mean_spectrum = np.mean(power[:, i:i+n_means], axis=1)
-            final_power.append(mean_spectrum)
-            final_times.append(time[i])
-
-        return np.array(final_power).T, freq, final_times
+        plt.tight_layout()
+        plt.savefig(filename)
