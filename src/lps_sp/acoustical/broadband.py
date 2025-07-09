@@ -12,8 +12,9 @@ import matplotlib.cm as cm
 
 import lps_utils.quantities as lps_qty
 
-def generate(frequencies: np.array, psd_db: np.array, n_samples: int,
-             fs: float, seed: int = None) -> np.array:
+def generate(frequencies: np.array, psd_db: np.array, n_samples: int, fs: float,
+             seed: typing.Union[int, np.random.Generator] = None,
+             filter_state: np.ndarray = None) -> np.array:
     """Generate broadband noise based on frequency and intensity information.
 
     Args:
@@ -90,7 +91,10 @@ def generate(frequencies: np.array, psd_db: np.array, n_samples: int,
     #       std = √P
     std_dev = np.sqrt(max_power)
 
-    rng = np.random.default_rng(seed = seed)
+    if isinstance(seed, np.random.Generator):
+        rng = seed
+    else:
+        rng = np.random.default_rng(seed = seed)
     order = 1025
     noise = rng.normal(0, std_dev, n_samples + order)
     # Generate more samples to eliminate filter transient response
@@ -111,8 +115,13 @@ def generate(frequencies: np.array, psd_db: np.array, n_samples: int,
     # antisymmetric=False, order=odd to force filter type 1,
     # in which the frequencies fs/2 and 0 must not be 0
 
-    out_noise = scipy.lfilter(coeficient, 1, noise)
-    return out_noise[order:]
+    if filter_state is None:
+        zi = scipy.lfilter_zi(coeficient, 1) * noise[0]
+    else:
+        zi = filter_state
+
+    out_noise, zf = scipy.lfilter(coeficient, 1, noise, zi=zi)
+    return out_noise[order:], zf
 
 def psd(signal: np.array,
         fs: typing.Union[float, lps_qty.Frequency],

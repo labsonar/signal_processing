@@ -11,6 +11,7 @@ import scipy.signal as scipy
 import librosa
 import matplotlib.pyplot as plt
 import matplotlib.colors as color
+import tikzplotlib as tikz
 
 import lps_sp.signal as lps_signal
 import lps_utils.prefered_number as lps_pn
@@ -53,6 +54,9 @@ class Parameters():
         Returns:
             np.ndarray: Scaled data.
         """
+        if not self.log_scale:
+            return data
+
         data[data < 1e-9] = 1e-9
         data = 20*np.log10(data)
         return data
@@ -124,7 +128,7 @@ class TimeIntegration():
             TimeIntegration: An instance of TimeIntegration initialized with sample-based
                 parameters.
         """
-        return TimeIntegration(in_seconds = True,
+        return TimeIntegration(in_seconds = False,
                                integration_interval = integration_interval_samples,
                                integration_overlap = integration_overlap_samples)
 
@@ -142,7 +146,7 @@ class TimeIntegration():
         Returns:
             TimeIntegration: An instance of TimeIntegration initialized with time-based parameters.
         """
-        return TimeIntegration(in_seconds = False,
+        return TimeIntegration(in_seconds = True,
                                integration_interval = integration_interval,
                                integration_overlap = integration_overlap)
 
@@ -270,8 +274,14 @@ class SpectralAnalysis(enum.Enum):
         """
 
         power, freq, time = SpectralAnalysis.spectrogram(data, fs, params)
-        power = power - lps_signal.tpsw(power)
-        power[power < -0.2] = 0
+
+        if params.log_scale:
+            power = params.scale(power)
+            power = power - lps_signal.tpsw(power)
+            power[power < -0.2] = 0
+        else:
+            power = power / lps_signal.tpsw(power)
+
         return power, freq, time
 
     @staticmethod
@@ -395,4 +405,10 @@ class SpectralAnalysis(enum.Enum):
             plt.gca().set_yticklabels(frequency_labels)
 
         plt.tight_layout()
-        plt.savefig(filename)
+
+        if filename.lower().endswith(".tex"):
+            tikz.save(filename)
+        else:
+            plt.savefig(filename, dpi=300)
+
+        plt.close()

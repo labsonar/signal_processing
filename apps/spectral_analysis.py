@@ -1,140 +1,106 @@
-"""
-Spectral Analysis Script
-
-This script reads an audio file, applies the specified type of spectral analysis,
-    and saves the result as a PNG image.
-
-Usage:
-    python script_name.py -h
-
-Example:
-    python script_name.py spectrogram path/to/audio.wav
-
-    will be generated the image path/to/audio_spectrogram.png
-"""
+import os
 import argparse
-
-import matplotlib.colors as plt_color
+import typing
+import tqdm
+import numpy as np
 import matplotlib.pyplot as plt
+import scipy.io.wavfile as wavfile
 
+import lps_utils.utils as lps_utils
 import lps_sp.acoustical.analysis as lps_analysis
-import lps_sp.acoustical.manager as lps_manager
 
 
-def main(wav_input_dir: str,
-         output_dir: str,
-         analysis: lps_analysis.SpectralAnalysis,
-         params: lps_analysis.Parameters,
-         integration: lps_analysis.TimeIntegration,
-         plot_type: lps_manager.PlotType,
-         frequency_in_x_axis: bool,
-         colormap: plt_color.Colormap,
-         override: bool,
-         n_files: int) -> None:
-    """
-    Perform spectral analysis on an audio file and save the result as an image.
+def _resolve_input_files(input_path: str) -> typing.List[str]:
+    if os.path.isfile(input_path) and input_path.endswith(".wav"):
+        return [input_path]
+    elif os.path.isdir(input_path):
+        return lps_utils.find_files(input_path, extension=".wav")
+    elif "," in input_path:
+        return [f.strip() for f in input_path.split(",") if f.strip().endswith(".wav")]
+    else:
+        raise ValueError(f"Input path '{input_path}' is not valid.")
 
-    Args:
-        wav_input_dir (str): Base directory to search for audio files to analyze.
-        output_dir (str): Directory to save the output images.
-        analysis (lps_analysis.SpectralAnalysis): The type of spectral analysis to perform.
-        params (lps_analysis.Parameters): Parameters for the spectral analysis.
-        integration (lps_analysis.TimeIntegration): Time integration.
-        plot_type (lps_manager.PlotType): Type of plot to generate.
-        frequency_in_x_axis (bool): If True, plot frequency values on the x-axis.
-        colormap (plt_color.Colormap): Colormap to use for the plot.
-        override (bool): If True, override any existing saved plots.
-        n_files (int): Number of files to analize. -1 to process all files.
-    """
+def _export_path(input_file: str, export_tex: bool) -> str:
+    directory, filename = os.path.split(input_file)
+    base, _ = os.path.splitext(filename)
+    extension = ".tex" if export_tex else ".png"
+    return os.path.join(directory, base + extension)
 
-    manager = lps_manager.AudioFileProcessor(
-            wav_base_dir = wav_input_dir,
-            processed_base_dir = output_dir,
-            analysis = analysis,
-            params = params,
-            integration = integration,
-            # extract_id = lambda filename: int(filename.rsplit('.',maxsplit=1)[0][-2:])
-        )
+def main():
+    """App main's function. """
 
-    file_ids = manager.get_fileids()
-    if n_files > 0:
-        file_ids = file_ids[:n_files]
+    parser = argparse.ArgumentParser(description="Spectral analysis of .wav files.")
+    parser.add_argument("input", type=str,
+                        help="Input .wav file, comma-separated list, or directory")
+    parser.add_argument("--n_fft", type=int, default=2048,
+                        help="FFT points (default: 1024)")
+    parser.add_argument("--overlap", type=float, default=0.0,
+                        help="Overlap (float 0-1 or int)")
+    parser.add_argument("--n_mels", type=int, default=256,
+                        help="Number of mel bands")
+    parser.add_argument("--decimation", type=float, default=1.0,
+                        help="Decimation rate")
+    parser.add_argument("--linear", action="store_true",
+                        help="Use linear scale")
+    parser.add_argument("--integration_time", type=float, default=1.0,
+                        help="Time integration window (in seconds)")
+    parser.add_argument("--integration_overlap", type=float, default=0.5,
+                        help="Time integration overlap (in seconds)")
+    parser.add_argument("--export_tex", action="store_true",
+                        help="Export figure to .tex")
 
-    manager.plot(
-        file=file_ids,
-        plot_type=plot_type,
-        frequency_in_x_axis=frequency_in_x_axis,
-        colormap=colormap,
-        override=override)
+    analysis_choices = [a.name.lower() for a in lps_analysis.SpectralAnalysis]
+    default_analysis_str = lps_analysis.SpectralAnalysis.LOFAR.name.lower()
+    parser.add_argument("--analysis", type=str, choices=analysis_choices,
+                        default=default_analysis_str,
+                        help="Type of spectral analysis to perform (default: lofar)")
 
-    df, _ = manager.files_to_df(file_ids, file_ids)
-    print(df)
+    available_colormaps = plt.colormaps()
+    default_cmap = 'jet'
+    parser.add_argument("--colormap", type=str, choices=available_colormaps,
+                        default=default_cmap,
+                        help=f"Colormap for the plot (default: {default_cmap})")
 
-if __name__ == "__main__":
-
-    spectral_choises = [str(i) for i in lps_analysis.SpectralAnalysis]
-    plot_choices = [str(pt) for pt in lps_manager.PlotType]
-
-    parser = argparse.ArgumentParser(description='Run spectral analysis on an audio file')
-    parser.add_argument('analysis', type=str, choices=spectral_choises,
-                        help='Type of spectral analysis to perform')
-    parser.add_argument('wav_input_dir', type=str,
-                        help='Base directory to search audio files to analyze')
-
-    parser.add_argument('--output_dir', type=str, default=None, help='Output directory')
-    parser.add_argument('--n_files', type=int, default=-1,
-                        help='Number of files to process')
-
-    # lps_analysis.Parameters arguments
-    parser.add_argument('--n_spectral_pts', type=int, default=1024,
-                        help='Number of points for spectral analysis (default: 1024)')
-    parser.add_argument('--overlap', type=float, default=0,
-                        help='Number of points or window factor to overlap (default: 0)')
-    parser.add_argument('--n_mels', type=int, default=256,
-                        help='Number of Mel bands (default: 256)')
-    parser.add_argument('--decimation_rate', type=float, default=1,
-                        help='Decimation rate (default: 1)')
-    parser.add_argument('--log_scale', type=bool, default=True,
-                        help='Apply log scale to the result (default: True)')
-
-    # lps_analysis.TimeIntegration arguments
-    parser.add_argument('--integration_interval', type=float, default=None,
-                        help='Interval for time integration (in seconds or samples (default))')
-    parser.add_argument('--integration_overlap', type=float, default=0,
-                        help='Overlap for time integration (in seconds or samples (default)')
-    parser.add_argument('--in_seconds', action='store_true',
-                        help='Specify if the integration interval and overlap are in seconds')
-
-    # Plotting arguments
-    parser.add_argument('--plot_type', type=str, default=str(lps_manager.PlotType.EXPORT_PLOT),
-            choices=plot_choices,
-            help=f'Type of plot to generate (default: {str(lps_manager.PlotType.EXPORT_PLOT)})')
-    parser.add_argument('--frequency_in_x_axis', action='store_true',
-                        help='Plot frequency values on the x-axis')
-    parser.add_argument('--colormap', type=str, default='jet',
-                        help='Colormap to use for the plot (default: jet)')
-    parser.add_argument('--override', action='store_true',
-                        help='Override any existing saved plots')
 
     args = parser.parse_args()
 
-    main(analysis = lps_analysis.SpectralAnalysis(spectral_choises.index(args.analysis)),
-        wav_input_dir = args.wav_input_dir,
-        output_dir = args.output_dir if args.output_dir is not None else args.wav_input_dir,
-        params = lps_analysis.Parameters(
-            n_spectral_pts=args.n_spectral_pts,
-            overlap=args.overlap,
-            n_mels=args.n_mels,
-            decimation_rate=args.decimation_rate,
-            log_scale=args.log_scale
-        ),
-        integration = None if args.integration_interval is None else
-                lps_analysis.TimeIntegration(integration_interval=args.integration_interval,
-                        integration_overlap=args.integration_overlap,
-                        in_seconds=args.in_seconds),
-        plot_type=lps_manager.PlotType(plot_choices.index(args.plot_type)),
-        frequency_in_x_axis=args.frequency_in_x_axis,
-        colormap=plt.get_cmap(args.colormap),
-        override=args.override,
-        n_files=args.n_files
+    files = _resolve_input_files(args.input)
+
+    params = lps_analysis.Parameters(
+        n_spectral_pts=args.n_fft,
+        overlap=args.overlap,
+        n_mels=args.n_mels,
+        decimation_rate=args.decimation,
+        log_scale=not args.linear
     )
+
+    integration = None
+    if args.integration_time is not None:
+        integration = lps_analysis.TimeIntegration.from_seconds(
+            integration_interval=args.integration_time,
+            integration_overlap=args.integration_overlap
+        )
+
+    for wav_file in tqdm.tqdm(files, desc="Processing files", ncols=120):
+        fs, data = wavfile.read(wav_file)
+
+        if data.ndim > 1:
+            data = data[:, 0]
+
+        out_path = _export_path(wav_file, args.export_tex)
+
+        analysis_type = lps_analysis.SpectralAnalysis[args.analysis.upper()]
+
+        analysis_type.plot(
+            filename=out_path,
+            data=data,
+            fs=fs,
+            params=params,
+            integration=integration,
+            frequency_in_x_axis=True,
+            colormap=plt.get_cmap(args.colormap)
+        )
+
+
+if __name__ == "__main__":
+    main()
