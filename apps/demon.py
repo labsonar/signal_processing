@@ -13,6 +13,7 @@ import librosa
 import sympy
 
 import lps_utils.utils as lps_utils
+import lps_sp.signal as lps_signal
 
 def _get_demon_steps(fs_in, fs_out=50):
     if (fs_in % fs_out) != 0:
@@ -124,6 +125,13 @@ def main():
     parser.add_argument("--merge", action="store_true", help="Plot all files in one graph")
     parser.add_argument("--export_tex", action="store_true",
                         help="Export figure to .tex")
+    parser.add_argument("--waterfall", action="store_true",
+                        help="Also generate waterfall (imshow) plots")
+    parser.add_argument("--fmin", type=float, default=None,
+                        help="Min frequency (Hz) for waterfall zoom")
+    parser.add_argument("--fmax", type=float, default=None,
+                        help="Max frequency (Hz) for waterfall zoom")
+
     args = parser.parse_args()
 
     files = _resolve_input_files(args.input)
@@ -136,13 +144,13 @@ def main():
         fs, signal = wavfile.read(filename)
         if signal.ndim > 1:
             signal = signal[:, 0]
-        intensity, freqs, _ = _demon(signal, fs,
+        intensity, freqs, times = _demon(signal, fs,
                             n_fft=args.n_fft,
                             max_freq=args.max_freq,
                             overlap_ratio=args.overlap)
         avg = np.mean(intensity, axis=0)
         label = os.path.splitext(os.path.basename(filename))[0]
-        curves.append((filename, label, freqs * 60, avg))
+        curves.append((filename, label, freqs * 60, avg, intensity, times))
 
         max_list.append(np.max(avg))
 
@@ -150,7 +158,7 @@ def main():
     if args.merge:
         plt.figure()
         offset_step = 1
-        for i, (_, label, freqs, avg) in enumerate(curves):
+        for i, (_, label, freqs, avg, _, _) in enumerate(curves):
             norm_avg = avg / np.max(max_list)
             offset = (len(curves) - i - 1) * offset_step
             plt.plot(freqs, norm_avg + offset, label=label)
@@ -169,23 +177,65 @@ def main():
         plt.close()
 
     else:
-        for filename, label, freqs, avg in curves:
-            plt.figure()
-            plt.plot(freqs, avg)
-            plt.title("DEMON")
-            plt.xlabel("Frequency [RPM]")
-            plt.ylabel("Intensity")
-            plt.tight_layout()
+        for filename, label, freqs, avg, intensity, times in curves:
 
             out_dir = os.path.dirname(filename)
             out_name = os.path.splitext(os.path.basename(filename))[0] + "_demon"
             out_path = os.path.join(out_dir, out_name)
 
-            if args.export_tex:
-                tikz.save(out_path + ".tex")
+            if args.waterfall:
+
+                fmin = args.fmin
+                fmax = args.fmax
+                freq_mask = np.ones_like(freqs, dtype=bool)
+                ext = ""
+                if fmin is not None:
+                    freq_mask &= freqs >= fmin
+                    ext = "_zoom"
+                if fmax is not None:
+                    freq_mask &= freqs <= fmax
+                    ext = "_zoom"
+
+                # intensity = lps_signal.Normalization.MIN_MAX(intensity)
+
+                intensity = 20*np.log10(intensity)
+                intensity -= np.max(intensity)
+                intensity = np.maximum(intensity, -20)
+
+                freqs_zoom = freqs[freq_mask]
+                intensity_zoom = intensity[:, freq_mask]
+
+                plt.figure(figsize=(6, 4))
+                im = plt.imshow(intensity_zoom,
+                                aspect="auto",
+                                extent=[freqs_zoom[0], freqs_zoom[-1], times[0], times[-1]],
+                                origin="upper",
+                                cmap="jet")
+                plt.colorbar(im, label="Intensity")
+                plt.xlabel("Frequency [RPM]")
+                plt.ylabel("Time [s]")
+
+                if args.export_tex:
+                    tikz.save(out_path + ext + ".tex")
+                else:
+                    plt.savefig(out_path + ext + ".png")
+                plt.close()
+
             else:
-                plt.savefig(out_path + ".png")
-            plt.close()
+                plt.figure()
+                plt.plot(freqs, avg)
+                plt.title("DEMON")
+                plt.xlabel("Frequency [RPM]")
+                plt.ylabel("Intensity")
+                plt.tight_layout()
+
+                out_dir = os.path.dirname(filename)
+
+                if args.export_tex:
+                    tikz.save(out_path + ".tex")
+                else:
+                    plt.savefig(out_path + ".png")
+                plt.close()
 
 if __name__ == "__main__":
     main()
