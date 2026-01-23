@@ -10,7 +10,7 @@ import lps_sp.acoustical.broadband as lps
 def main(fs, ref_db, n_samples):
     """Plot the PSDs for all noise types."""
 
-    base_dir = "./results"
+    base_dir = "./result"
     os.makedirs(base_dir, exist_ok = True)
 
     norm = lps_signal.Normalization.MIN_MAX_ZERO_CENTERED
@@ -38,7 +38,7 @@ def main(fs, ref_db, n_samples):
 
         freqs_theoretical, psd_theoretical = color.to_psd(fs=fs, ref_db=ref_db)
 
-        noise = color.generate(n_samples=n_samples, fs=fs, ref_db=ref_db)
+        noise, _ = color.generate(n_samples=n_samples, fs=fs, ref_db=ref_db)
         freqs_estimated, psd_estimated = lps.psd(noise, fs=fs)
 
         plt.plot(freqs_theoretical, psd_theoretical,

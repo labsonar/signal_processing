@@ -14,7 +14,7 @@ import lps_utils.quantities as lps_qty
 
 def generate(frequencies: np.array, psd_db: np.array, n_samples: int, fs: float,
              seed: typing.Union[int, np.random.Generator] = None,
-             filter_state: np.ndarray = None) -> np.array:
+             filter_state: np.ndarray = None) -> typing.Tuple[np.array, np.ndarray]:
     """Generate broadband noise based on frequency and intensity information.
 
     Args:
@@ -108,7 +108,7 @@ def generate(frequencies: np.array, psd_db: np.array, n_samples: int, fs: float,
     intensities_norm = psd_linear/np.max(psd_linear)
 
     if np.min(intensities_norm) == 1:
-        return noise[order:]
+        return noise[order:], None
 
     coeficient = scipy.firwin2(order, frequencies, np.sqrt(intensities_norm), antisymmetric=False)
     # https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.firwin2.html

@@ -3,16 +3,16 @@ This module contains unit tests for the `lps_sp.acoustical.broadband` modules, f
 Power Spectral Density (PSD) calculations and broadband noise generation.
 
 Tests:
-    test_white_noise: Tests the PSD calculation for white noise, ensuring that the mean PSD 
+    test_white_noise: Tests the PSD calculation for white noise, ensuring that the mean PSD
                       is close to the expected value.
-    test_sin: Tests the PSD calculation for a sinusoidal wave, ensuring that the estimated 
+    test_sin: Tests the PSD calculation for a sinusoidal wave, ensuring that the estimated
               RMS value and background noise level are close to the expected values.
-    test_bb: Tests the broadband noise generation and PSD calculation, ensuring that the 
+    test_bb: Tests the broadband noise generation and PSD calculation, ensuring that the
              generated noise spectrum matches the desired spectrum.
 
 Example:
     To run the tests, execute the following command:
-    
+
         python -m unittest broadband_test.py
 """
 import unittest
@@ -95,7 +95,7 @@ class TestBroadband(unittest.TestCase):
         for i in range(min_sample, max_sample):
             desired_spectrum[i] = max_db
 
-        signal = lps_bb.generate(frequencies, desired_spectrum, len(self.t), self.fs)
+        signal, _ = lps_bb.generate(frequencies, desired_spectrum, len(self.t), self.fs)
 
         freqs, psd_values = lps_bb.psd(signal=signal, fs=self.fs)
 

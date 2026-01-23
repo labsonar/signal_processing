@@ -14,7 +14,7 @@ import lps_sp.acoustical.broadband as lps_bb
 def main():
     """This script generate a wav and a plot, showing the sinthetic PSD vs the designed PSD.."""
 
-    base_dir = "./results"
+    base_dir = "./result"
     os.makedirs(base_dir, exist_ok = True)
 
     # Set parameters for synthetic noise generation
@@ -40,7 +40,7 @@ def main():
 
     # Generate synthetic noise based on the desired spectrum
     frequencies = np.linspace(0, fs / 2, len(desired_spectrum))
-    noise = lps_bb.generate(frequencies, desired_spectrum, n_samples, fs)
+    noise, _ = lps_bb.generate(frequencies, desired_spectrum, n_samples, fs)
 
     # Estimate the spectrum of the generated noise
     fft_freq, fft_result = lps_bb.psd(signal=noise, fs=fs, window_size=4096, overlap=0.5)

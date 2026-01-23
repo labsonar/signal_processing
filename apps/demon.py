@@ -210,7 +210,7 @@ def main():
                                 aspect="auto",
                                 extent=[freqs_zoom[0], freqs_zoom[-1], times[0], times[-1]],
                                 origin="upper",
-                                cmap="jet")
+                                cmap="magma")
                 plt.colorbar(im, label="Intensity")
                 plt.xlabel("Frequency [RPM]")
                 plt.ylabel("Time [s]")
