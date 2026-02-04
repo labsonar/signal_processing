@@ -177,6 +177,9 @@ class TimeIntegration():
         final_power = []
         final_times = []
 
+        if (self.integration_interval < delta_t):
+            raise UnboundLocalError("Integration time inferior to window size")
+
         for i in range(0, len(time), n_overlap):
             mean_spectrum = np.mean(power[:, i:i+n_means], axis=1)
             final_power.append(mean_spectrum)
@@ -338,7 +341,8 @@ class SpectralAnalysis(enum.Enum):
              params: Parameters = Parameters(),
              integration: TimeIntegration = None,
              normalization: lps_signal.Normalization = lps_signal.Normalization.NORM_L2,
-             frequency_limit: float = None,
+             center_frequency: float = None,
+             frequency_span: float = None,
              frequency_in_x_axis: bool = False,
              colormap: color.Colormap = plt.get_cmap('jet')):
         """
@@ -350,7 +354,8 @@ class SpectralAnalysis(enum.Enum):
             params (Parameters): Parameters for spectral analysis.
             integration (TimeIntegration, optional): Time integration object. Defaults to None.
             normalization (Normalization, optional): Normalization function. Defaults to NORM_L2.
-            frequency_limit (float, optional): Max frequency to display. Defaults to None.
+            center_frequency(float, optional): Center frequency to display. Defaults to None.
+            frequency_span(float, optional): Frequency span to display. Defaults to None.
             frequency_in_x_axis (bool, optional): If True, frequency is x-axis, time y-axis.
                 Defaults to False.
             colormap (Colormap, optional): Matplotlib colormap for the image. Defaults to 'jet'.
@@ -363,11 +368,15 @@ class SpectralAnalysis(enum.Enum):
         if integration is not None:
             power, freqs, times = integration.apply(power, freqs, times)
 
-        if frequency_limit is not None:
-            index_limit = next((i for i, freq in enumerate(freqs) if freq > frequency_limit),
-                               len(freqs))
-            freqs = freqs[:index_limit]
-            power = power[:index_limit, :]
+        if center_frequency is not None and frequency_span is not None:
+            f_min = center_frequency - frequency_span / 2
+            f_max = center_frequency + frequency_span / 2
+
+            freq_mask = (freqs >= f_min) & (freqs <= f_max)
+
+            freqs = freqs[freq_mask]
+            power = power[freq_mask, :]
+
 
         if normalization is not None:
             power = normalization(power)

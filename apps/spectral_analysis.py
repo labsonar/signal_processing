@@ -42,12 +42,17 @@ def main():
                         help="Decimation rate")
     parser.add_argument("--linear", action="store_true",
                         help="Use linear scale")
-    parser.add_argument("--integration_time", type=float, default=1.0,
+    parser.add_argument("--integration_time", type=float, default=None,
                         help="Time integration window (in seconds)")
     parser.add_argument("--integration_overlap", type=float, default=0.5,
                         help="Time integration overlap (in seconds)")
     parser.add_argument("--export_tex", action="store_true",
                         help="Export figure to .tex")
+    parser.add_argument("--fc", type=float, default=None,
+                    help="Central frequency for frequency subselection (Hz)")
+    parser.add_argument("--fspan", type=float, default=None,
+                    help="Frequency span around central frequency (Hz)")
+
 
     analysis_choices = [a.name.lower() for a in lps_analysis.SpectralAnalysis]
     default_analysis_str = lps_analysis.SpectralAnalysis.LOFAR.name.lower()
@@ -97,6 +102,8 @@ def main():
             fs=fs,
             params=params,
             integration=integration,
+            center_frequency=args.fc,
+            frequency_span=args.fspan,
             frequency_in_x_axis=True,
             colormap=plt.get_cmap(args.colormap)
         )
