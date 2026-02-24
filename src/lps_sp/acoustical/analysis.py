@@ -15,6 +15,7 @@ import tikzplotlib as tikz
 
 import lps_sp.signal as lps_signal
 import lps_utils.prefered_number as lps_pn
+import lps_utils.quantities as lps_qty
 
 
 class Parameters():
@@ -337,13 +338,13 @@ class SpectralAnalysis(enum.Enum):
     def plot(self,
              filename: str,
              data: np.array,
-             fs: float,
+             fs: float | lps_qty.Frequency,
              params: Parameters = Parameters(),
              integration: TimeIntegration = None,
              normalization: lps_signal.Normalization = lps_signal.Normalization.NORM_L2,
              center_frequency: float = None,
              frequency_span: float = None,
-             frequency_in_x_axis: bool = False,
+             frequency_in_x_axis: bool = True,
              colormap: color.Colormap = plt.get_cmap('jet')):
         """
         Process data with spectral analysis and plot the power spectrum.
@@ -363,7 +364,8 @@ class SpectralAnalysis(enum.Enum):
         Returns:
             None
         """
-        power, freqs, times = self.apply(data, fs, params)
+        fs_hz = fs.get_hz() if isinstance(fs, lps_qty.Frequency) else fs
+        power, freqs, times = self.apply(data, fs_hz, params)
 
         if integration is not None:
             power, freqs, times = integration.apply(power, freqs, times)

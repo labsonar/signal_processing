@@ -78,7 +78,7 @@ def generate(frequencies: np.array, psd_db: np.array, n_samples: int, fs: float,
             psd_db = np.append(psd_db[0], psd_db)
 
 
-    psd_linear = 10 ** ((psd_db) / 20)  # Convert dB to linear scale
+    psd_linear = 10 ** (psd_db / 10)  # Convert dB to linear scale
 
     # Calculate total noise power with the highest PSD of the signal
     #    P = ∫ ​psd df  for white noise => P = psd * Δf = psd * fs/2
@@ -95,9 +95,6 @@ def generate(frequencies: np.array, psd_db: np.array, n_samples: int, fs: float,
         rng = seed
     else:
         rng = np.random.default_rng(seed = seed)
-    order = 1025
-    noise = rng.normal(0, std_dev, n_samples + order)
-    # Generate more samples to eliminate filter transient response
 
 
     # Normalize frequencies between 0 and 1 (fs/2)
@@ -108,20 +105,30 @@ def generate(frequencies: np.array, psd_db: np.array, n_samples: int, fs: float,
     intensities_norm = psd_linear/np.max(psd_linear)
 
     if np.min(intensities_norm) == 1:
-        return noise[order:], None
+        return rng.normal(0, std_dev, n_samples), None
 
+
+    order = (1024 * 16) + 1
     coeficient = scipy.firwin2(order, frequencies, np.sqrt(intensities_norm), antisymmetric=False)
     # https://docs.scipy.org/doc/scipy/reference/generated/scipy.signal.firwin2.html
     # antisymmetric=False, order=odd to force filter type 1,
     # in which the frequencies fs/2 and 0 must not be 0
 
     if filter_state is None:
-        zi = scipy.lfilter_zi(coeficient, 1) * noise[0]
-    else:
-        zi = filter_state
+        noise = rng.normal(0, std_dev, n_samples + order)
+        # Generate more samples to eliminate filter transient response
 
-    out_noise, zf = scipy.lfilter(coeficient, 1, noise, zi=zi)
-    return out_noise[order:], zf
+        zi = scipy.lfilter_zi(coeficient, 1) * noise[0]
+        out_noise, zf = scipy.lfilter(coeficient, 1, noise, zi=zi)
+        out_noise = out_noise[order:]
+
+    else:
+        noise = rng.normal(0, std_dev, n_samples)
+
+        zi = filter_state
+        out_noise, zf = scipy.lfilter(coeficient, 1, noise, zi=zi)
+
+    return out_noise, zf
 
 def psd(signal: np.array,
         fs: typing.Union[float, lps_qty.Frequency],
@@ -172,7 +179,13 @@ def psd(signal: np.array,
     # Removing DC component
     return freqs[1:], intensity[1:]
 
-def plot_psd(filename: str, noise: np.array, fs: lps_qty.Frequency)-> None:
+def plot_psd(filename: str,
+             noise: np.array,
+             fs: lps_qty.Frequency,
+             window_size: int = 1024,
+             overlap: typing.Union[int, float] = 0,
+             window: str = 'hann',
+             db_unity = True)-> None:
     """
     Plots and saves the Power Spectral Density (PSD) of a single noise signal.
 
@@ -183,10 +196,11 @@ def plot_psd(filename: str, noise: np.array, fs: lps_qty.Frequency)-> None:
     """
 
     plt.figure(figsize=(10, 6))
-    f_bb, i_bb = psd(noise, fs=fs)
+    f_bb, i_bb = psd(noise, fs=fs, window_size=window_size,
+                     overlap=overlap, window=window, db_unity=db_unity)
     plt.plot(f_bb, i_bb)
     plt.xlabel("Frequency [Hz]")
-    plt.ylabel("PSD [dB]")
+    plt.ylabel("PSD [dB]" if db_unity else "PSD")
     plt.grid(True)
     plt.tight_layout()
     plt.savefig(filename)
