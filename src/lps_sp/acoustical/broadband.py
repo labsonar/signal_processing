@@ -3,12 +3,17 @@ Acoustical Signal Module
 
 This module contains functions for generating and evaluate broadband signals.
 """
+import os
 import enum
+import math
 import typing
 import numpy as np
 import scipy.signal as scipy
+import sympy
+import librosa
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
+import tikzplotlib as tikz
 
 import lps_utils.quantities as lps_qty
 
@@ -158,6 +163,8 @@ def psd(signal: np.array,
     if isinstance(fs, lps_qty.Frequency):
         fs = fs.get_hz()
 
+    signal = np.squeeze(signal)
+
     if isinstance(overlap, float):
         if overlap < 0 or overlap >= 1:
             raise UnboundLocalError("Overlap expected as a float in interval [0, 1[")
@@ -174,7 +181,7 @@ def psd(signal: np.array,
                                 average='mean')
 
     if db_unity:
-        intensity = 20 * np.log10(intensity)
+        intensity = 10 * np.log10(intensity)
 
     # Removing DC component
     return freqs[1:], intensity[1:]
@@ -209,7 +216,10 @@ def plot_psd(filename: str,
 def plot_psds(filename: str,
               noises: typing.List[np.array],
               labels: typing.List[str],
-              fs: lps_qty.Frequency)-> None:
+              fs: lps_qty.Frequency,
+              window_size: int = 1024,
+              overlap: typing.Union[int, float] = 0,
+              window: str = 'hann',)-> None:
     """
     Plots and saves the Power Spectral Density (PSD) curves of multiple noise signals.
 
@@ -223,14 +233,216 @@ def plot_psds(filename: str,
     plt.figure(figsize=(10, 6))
     cmap = cm.get_cmap("viridis", min(len(noises), len(labels)))
     for i, (noise, label) in enumerate(zip(noises, labels)):
-        f_bb, i_bb = psd(noise, fs=fs.get_hz())
-        plt.plot(f_bb, i_bb, label=label, color=cmap(i))
+        f_bb, i_bb = psd(noise,
+                         fs=fs.get_hz(),
+                         window_size=window_size,
+                         overlap=overlap,
+                         window=window)
+        plt.semilogx(f_bb, i_bb, label=label, color=cmap(i))
     plt.xlabel("Frequency [Hz]")
     plt.ylabel("PSD [dB]")
     plt.grid(True)
     plt.legend()
     plt.tight_layout()
     plt.savefig(filename)
+    plt.close()
+
+def get_demon_steps(fs_in: float, fs_out: float):
+    if (fs_in % fs_out) != 0:
+        raise ValueError("fs_in não divisível por fs_out")
+
+    factors = sympy.factorint(int(fs_in / fs_out))
+    factor_list = [f for factor, count in factors.items() for f in [factor] * count]
+
+    decimate_ratio1 = 1
+    decimate_ratio2 = 1
+    add_one = True
+
+    while factor_list:
+        if len(factor_list) == 1:
+            part1 = factor_list.pop()
+            part2 = 1
+        elif len(factor_list) == 2:
+            part1 = factor_list.pop(0)
+            part2 = factor_list.pop()
+        else:
+            part1 = factor_list.pop(0) * factor_list.pop()
+            part2 = 1
+
+        if add_one:
+            decimate_ratio1 *= part1
+            decimate_ratio2 *= part2
+        else:
+            decimate_ratio1 *= part2
+            decimate_ratio2 *= part1
+        add_one = not add_one
+
+    return [decimate_ratio1, decimate_ratio2]
+
+def demon(signal: np.array,
+          fs: lps_qty.Frequency | float,
+          n_fft: int =1024,
+          max_freq: lps_qty.Frequency | float = lps_qty.Frequency.hz(100),
+          overlap_ratio: float = 0.5,
+          apply_bandpass=True,
+          bandpass_specs=None,
+          method='abs'):
+
+    fs = fs.get_hz() if isinstance(fs, lps_qty.Frequency) else fs
+    max_freq = max_freq.get_hz() if isinstance(max_freq, lps_qty.Frequency) else max_freq
+
+    [decimate_ratio1, decimate_ratio2] = get_demon_steps(fs, max_freq)
+    x = signal.copy()
+
+
+    nyq = fs / 2
+    if apply_bandpass:
+        if bandpass_specs is None:
+            wp = [1000 / nyq, 2000 / nyq]
+            ws = [700 / nyq, 2300 / nyq]
+            rp = 0.5
+            As = 50
+        else:
+            fp = bandpass_specs["fp"]
+            fs_band = bandpass_specs["fs"]
+            wp = np.array(fp) / nyq
+            ws = np.array(fs_band) / nyq
+            rp = bandpass_specs["rs"]
+            As = bandpass_specs["as"]
+
+        N, wc = scipy.cheb2ord(wp, ws, rp, As)
+        b, a = scipy.cheby2(N, rs=As, Wn=wc, btype='bandpass', output='ba', analog=True)
+        x = scipy.lfilter(b, a, x, axis=0)
+
+    if method == 'hilbert':
+        x = scipy.hilbert(x)
+    elif method == 'abs':
+        x = np.abs(x)
+    else:
+        raise ValueError("Método inválido")
+
+    x = scipy.decimate(x, decimate_ratio1, ftype='fir', zero_phase=False)
+    x = scipy.decimate(x, decimate_ratio2, ftype='fir', zero_phase=False)
+
+    final_fs = (fs // decimate_ratio1) // decimate_ratio2
+
+    max_val = np.max(np.abs(x))
+    if max_val > 0:
+        x = x / max_val
+
+    x = x - np.mean(x)
+    x = np.nan_to_num(x)
+
+    fft_over = math.floor(n_fft - 2 * max_freq * overlap_ratio)
+    sxx = librosa.stft(x, window='hann', win_length=n_fft,
+                       hop_length=n_fft - fft_over, n_fft=n_fft)
+    freq = librosa.fft_frequencies(sr=final_fs, n_fft=n_fft)
+    time = librosa.frames_to_time(np.arange(sxx.shape[1]), sr=final_fs,
+                                  hop_length=(n_fft - fft_over))
+
+    sxx = np.abs(sxx)
+    sxx, freq = sxx[8:, :], freq[8:]
+
+    return np.transpose(sxx), freq, time
+
+def demon_line(
+        filename: str,
+        signal: np.array,
+        fs: lps_qty.Frequency | float,
+        n_fft: int =1024,
+        max_freq: lps_qty.Frequency | float = lps_qty.Frequency.hz(100),
+        overlap_ratio: float = 0.5,
+        apply_bandpass=True,
+        bandpass_specs=None,
+        method='abs'):
+
+    intensity, freqs, _ = demon(
+            signal,
+            fs,
+            n_fft = n_fft,
+            max_freq = max_freq,
+            overlap_ratio = overlap_ratio,
+            apply_bandpass = apply_bandpass,
+            bandpass_specs = bandpass_specs,
+            method = method,
+        )
+    avg = np.mean(intensity, axis=0)
+
+    plt.figure()
+    plt.plot(freqs * 60, avg)
+    plt.xlabel("Frequency [RPM]")
+    plt.ylabel("Intensity")
+    plt.tight_layout()
+
+    out_dir = os.path.dirname(filename)
+    os.makedirs(out_dir, exist_ok=True)
+
+    _, extenstion = os.path.splitext(filename)
+
+    if extenstion == "png":
+        tikz.save(filename)
+    else:
+        plt.savefig(filename)
+    plt.close()
+
+def plot_demon_lines(filename: str,
+                     signals: typing.List[np.array],
+                     labels: typing.List[str],
+                     fs: lps_qty.Frequency | float,
+                     n_fft: int = 1024,
+                     max_freq: lps_qty.Frequency | float = lps_qty.Frequency.hz(100),
+                     overlap_ratio: float = 0.5,
+                     apply_bandpass: bool = True,
+                     bandpass_specs=None,
+                     method: str = 'abs') -> None:
+    """
+    Plots and saves DEMON average spectral lines (mean intensity over time)
+    for multiple signals.
+
+    Parameters:
+        filename (str): Path to save the figure.
+        signals (List[np.array]): List of 1D signals.
+        labels (List[str]): Labels corresponding to each signal.
+        fs (Frequency | float): Sampling frequency.
+    """
+
+    plt.figure(figsize=(10, 6))
+    cmap = cm.get_cmap("viridis", min(len(signals), len(labels)))
+
+    for i, (signal, label) in enumerate(zip(signals, labels)):
+
+        intensity, freqs, _ = demon(
+            signal,
+            fs,
+            n_fft=n_fft,
+            max_freq=max_freq,
+            overlap_ratio=overlap_ratio,
+            apply_bandpass=apply_bandpass,
+            bandpass_specs=bandpass_specs,
+            method=method,
+        )
+
+        avg_line = np.mean(intensity, axis=0)
+
+        plt.plot(freqs * 60, avg_line, label=label, color=cmap(i))
+
+    plt.xlabel("Frequency [Hz]")
+    plt.ylabel("DEMON Intensity")
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+
+    out_dir = os.path.dirname(filename)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
+
+    _, extension = os.path.splitext(filename)
+
+    if extension.lower() == ".tex":
+        tikz.save(filename)
+    else:
+        plt.savefig(filename)
+
     plt.close()
 
 class ColoredNoises(enum.Enum):

@@ -188,7 +188,6 @@ class TimeIntegration():
 
         return np.array(final_power).T, np.array(freq), np.array(final_times)
 
-
 class SpectralAnalysis(enum.Enum):
     """ Enum class to represent and process the available spectral analyzes in this module """
     SPECTROGRAM = 0
@@ -423,3 +422,98 @@ class SpectralAnalysis(enum.Enum):
             plt.savefig(filename, dpi=300)
 
         plt.close()
+
+def plot_spectral_analysis(
+        filename: str,
+        signals: typing.List[np.array],
+        labels: typing.List[str],
+        fs: float | lps_qty.Frequency,
+        analysis: SpectralAnalysis = SpectralAnalysis.LOFAR,
+        params: Parameters = Parameters(),
+        integration: TimeIntegration = None,
+        normalization: lps_signal.Normalization = lps_signal.Normalization.NORM_L2,
+        frequency_in_x_axis: bool = True,
+        colormap: color.Colormap = plt.get_cmap('jet')) -> None:
+    """
+    Plot multiple spectral analyses in a single figure using an optimal grid layout.
+
+    Args:
+        filename (str): Output file.
+        signals (List[np.array]): List of input signals.
+        labels (List[str]): Labels for each signal.
+        fs (float | Frequency): Sampling frequency.
+        analysis (SpectralAnalysis): Type of spectral analysis.
+        params (Parameters): Spectral parameters.
+        integration (TimeIntegration, optional): Time integration.
+        normalization (Normalization, optional): Power normalization.
+        frequency_in_x_axis (bool): If True, freq in X axis.
+        colormap (Colormap): Matplotlib colormap.
+    """
+
+    fs_hz = fs.get_hz() if isinstance(fs, lps_qty.Frequency) else fs
+    n_signals = min(len(signals), len(labels))
+
+    n_cols = int(np.ceil(np.sqrt(n_signals)))
+    n_rows = int(np.ceil(n_signals / n_cols))
+
+    fig, axes = plt.subplots(n_rows, n_cols,
+                             figsize=(5*n_cols, 4*n_rows),
+                             squeeze=False)
+
+    axes = axes.flatten()
+
+    for idx, (signal, label) in enumerate(zip(signals, labels)):
+
+        power, freqs, times = analysis.apply(signal, fs_hz, params)
+
+        if integration is not None:
+            power, freqs, times = integration.apply(power, freqs, times)
+
+        if normalization is not None:
+            power = normalization(power)
+
+        if frequency_in_x_axis:
+            power = power.T
+
+        ax = axes[idx]
+
+        im = ax.imshow(power,
+                       aspect='auto',
+                       origin='lower',
+                       cmap=colormap)
+
+        ax.set_title(label)
+
+        n_ticks = 5
+        time_ticks = np.linspace(0, len(times)-1, n_ticks, dtype=int)
+        freq_ticks = np.linspace(0, len(freqs)-1, n_ticks, dtype=int)
+
+        if frequency_in_x_axis:
+            ax.set_xlabel("Frequency (Hz)")
+            ax.set_ylabel("Time (s)")
+            ax.set_xticks(freq_ticks)
+            ax.set_xticklabels([f"{freqs[i]:.1f}" for i in freq_ticks])
+            ax.set_yticks(time_ticks)
+            ax.set_yticklabels([f"{times[i]:.2f}" for i in time_ticks])
+            ax.invert_yaxis()
+        else:
+            ax.set_xlabel("Time (s)")
+            ax.set_ylabel("Frequency (Hz)")
+            ax.set_xticks(time_ticks)
+            ax.set_xticklabels([f"{times[i]:.2f}" for i in time_ticks])
+            ax.set_yticks(freq_ticks)
+            ax.set_yticklabels([f"{freqs[i]:.1f}" for i in freq_ticks])
+
+        fig.colorbar(im, ax=ax)
+
+    for j in range(n_signals, len(axes)):
+        fig.delaxes(axes[j])
+
+    plt.tight_layout()
+
+    if filename.lower().endswith(".tex"):
+        tikz.save(filename)
+    else:
+        plt.savefig(filename, dpi=300)
+
+    plt.close()
