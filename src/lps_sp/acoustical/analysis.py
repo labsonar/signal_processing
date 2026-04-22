@@ -16,9 +16,9 @@ import tikzplotlib as tikz
 import lps_sp.signal as lps_signal
 import lps_utils.prefered_number as lps_pn
 import lps_utils.quantities as lps_qty
+import lps_utils.hashable as lps_hash
 
-
-class Parameters():
+class Parameters(lps_hash.Hashable):
     """ Class for unify acoustical processing parameters. """
 
     def __init__(self,
@@ -506,6 +506,81 @@ def plot_spectral_analysis(
 
         fig.colorbar(im, ax=ax)
 
+    for j in range(n_signals, len(axes)):
+        fig.delaxes(axes[j])
+
+    plt.tight_layout()
+
+    if filename.lower().endswith(".tex"):
+        tikz.save(filename)
+    else:
+        plt.savefig(filename, dpi=300)
+
+    plt.close()
+
+def plot_in_time(
+        filename: str,
+        signals: typing.List[np.ndarray],
+        labels: typing.List[str],
+        fs: float | lps_qty.Frequency,
+        zoom_samples: int | None = None,
+) -> None:
+    """
+    Plot multiple time-domain signals with a centered zoom window.
+
+    Args:
+        filename (str): Output file.
+        signals (List[np.ndarray]): List of input signals.
+        labels (List[str]): Labels for each signal.
+        fs (float | Frequency): Sampling frequency.
+        zoom_samples (int): Number of samples to display around center.
+    """
+
+    fs_hz = fs.get_hz() if isinstance(fs, lps_qty.Frequency) else fs
+    n_signals = min(len(signals), len(labels))
+
+    # Grid layout (igual ao spectral)
+    n_cols = int(np.ceil(np.sqrt(n_signals)))
+    n_rows = int(np.ceil(n_signals / n_cols))
+
+    fig, axes = plt.subplots(
+        n_rows, n_cols,
+        figsize=(5*n_cols, 3*n_rows),
+        squeeze=False
+    )
+
+    axes = axes.flatten()
+
+    for idx, (signal, label) in enumerate(zip(signals, labels)):
+
+        signal = np.asarray(signal).squeeze()
+        N = len(signal)
+
+        t = np.arange(N) / fs_hz
+
+        if zoom_samples:
+            center = N // 2
+
+            half = zoom_samples // 2
+
+            start = max(0, center - half)
+            end = min(N, center + half)
+
+            signal = signal[start:end]
+            t = t[start:end]
+
+
+        ax = axes[idx]
+
+        ax.plot(t, signal)
+        ax.set_title(label)
+
+        ax.set_xlabel("Time (s)")
+        ax.set_ylabel("Amplitude")
+
+        ax.grid(True)
+
+    # Remove eixos vazios
     for j in range(n_signals, len(axes)):
         fig.delaxes(axes[j])
 

@@ -28,11 +28,22 @@ def decimate(data: np.array, decimation_rate: typing.Union[int, float]) -> np.ar
     if decimation_rate == 1:
         return data
 
-    b, a = scipy.cheby1(8, 0.05, 0.8 / decimation_rate, btype='low')
-    y = scipy.filtfilt(b, a, data)
-    return scipy.resample(y, int(len(y) / decimation_rate))
+    if decimation_rate > 1:
+        # -------------------------
+        # DOWNSAMPLE
+        # -------------------------
+        b, a = scipy.cheby1(8, 0.05, 0.8 / decimation_rate, btype='low')
+        y = scipy.filtfilt(b, a, data)
+
+        return scipy.resample_poly(y, 1, int(decimation_rate))
     # TODO verificar se interpolação circular gera problemas e usar a interpolação linear abaixo
     # return scipy.resample_poly(y, int(len(y) / decimation_rate), decimation_rate)
+
+
+    else:
+        up = int(round(1 / decimation_rate))
+
+        return scipy.resample_poly(data, up, 1)
 
 def tpsw(data: np.array, n: int = None, p: int = None, a: int = None) -> np.array:
     """Perform TPSW data calculation

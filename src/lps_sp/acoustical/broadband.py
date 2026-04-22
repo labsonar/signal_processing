@@ -424,9 +424,9 @@ def plot_demon_lines(filename: str,
 
         avg_line = np.mean(intensity, axis=0)
 
-        plt.plot(freqs * 60, avg_line, label=label, color=cmap(i))
+        plt.plot(freqs, avg_line, label=label, color=cmap(i))
 
-    plt.xlabel("Frequency [Hz]")
+    plt.xlabel("Frequency [rpm]")
     plt.ylabel("DEMON Intensity")
     plt.grid(True)
     plt.legend()
