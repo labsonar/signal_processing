@@ -5,6 +5,7 @@ This module contains a class and functions for applying spectral analysis to inp
 """
 import enum
 import typing
+import argparse
 
 import numpy as np
 import scipy.signal as scipy
@@ -422,6 +423,66 @@ class SpectralAnalysis(enum.Enum):
             plt.savefig(filename, dpi=300)
 
         plt.close()
+
+    @staticmethod
+    def add_args(parser: argparse.ArgumentParser):
+
+        group = parser.add_argument_group(
+            "Spectral Analysis",
+        )
+
+        group.add_argument(
+            "--spectral-analysis",
+            type=str,
+            default=SpectralAnalysis.LOFAR.name,
+            choices=[e.name for e in SpectralAnalysis],
+            help="Spectral representation type."
+        )
+
+        group.add_argument(
+            "--spectral-n-pts",
+            type=int,
+            default=1024,
+            help="FFT size."
+        )
+
+        group.add_argument(
+            "--spectral-overlap",
+            type=float,
+            default=0.0,
+            help="Spectral overlap."
+        )
+
+        group.add_argument(
+            "--spectral-n-mels",
+            type=int,
+            default=256,
+            help="Number of mel bins."
+        )
+
+        group.add_argument(
+            "--spectral-decimation",
+            type=int,
+            default=1,
+            help="Spectral decimation factor."
+        )
+
+        group.add_argument(
+            "--spectral-log-scale",
+            action="store_true",
+            help="Use logarithmic spectral scale."
+        )
+
+    @staticmethod
+    def build_from_args(args: argparse.Namespace) -> typing.Tuple['SpectralAnalysis', Parameters]:
+        params = Parameters(
+            n_spectral_pts=args.spectral_n_pts,
+            overlap=args.spectral_overlap,
+            n_mels=args.spectral_n_mels,
+            decimation_rate=args.spectral_decimation,
+            log_scale=args.spectral_log_scale
+        )
+        return SpectralAnalysis[args.spectral_analysis], params
 
 def plot_spectral_analysis(
         filename: str,

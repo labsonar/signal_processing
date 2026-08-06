@@ -127,7 +127,8 @@ class Normalization(enum.Enum):
             return (data - np.min(data, axis=0))/(np.max(data, axis=0) - np.min(data, axis=0))
 
         if self == Normalization.MIN_MAX_ZERO_CENTERED:
-            return data/np.max(np.abs(data), axis=0)
+            max_val = np.max(np.abs(data), axis=0)
+            return data / max_val
 
         if self == Normalization.NORM_L1:
             # to ensure that the data is positive to avoid negative results
@@ -162,10 +163,22 @@ def save_normalized_wav(signal: np.ndarray,
         filename (str): Filename
     """
     normalized = Normalization.MIN_MAX_ZERO_CENTERED(signal)
-    norm_signal = (normalized * 32767).astype(np.int16)
+    save_convert_wav(normalized, fs, filename)
+
+def save_convert_wav(signal: np.ndarray,
+                        fs: typing.Union[int, lps_qty.Frequency],
+                        filename: str) -> None:
+    """Export a .wav file
+
+    Args:
+        signal (np.ndarray): Signal to be normalized and exported
+        fs (int, lps_qty.Frequency): Sample Frequency
+        filename (str): Filename
+    """
+    norm_signal = (signal * 32767).astype(np.int16)
     save_wav(norm_signal, fs, filename)
 
-def save_wav(signal: np.ndarray[np.integer],
+def save_wav(signal: np.ndarray,
              fs: typing.Union[int, lps_qty.Frequency],
              filename: str) -> None:
     """Export a .wav file
@@ -180,4 +193,8 @@ def save_wav(signal: np.ndarray[np.integer],
 
     if isinstance(fs, lps_qty.Frequency):
         fs = int(fs.get_hz())
+
+    if signal.ndim == 2 and signal.shape[0] == 1:
+        signal = signal.squeeze(0)
+
     wavfile.write(filename, fs, signal)

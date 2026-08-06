@@ -1,6 +1,6 @@
 """
-This module provides functionality to estimate probability density functions (PDFs) and 
-compute similarity measures between them. It includes an enumeration for different similarity 
+This module provides functionality to estimate probability density functions (PDFs) and
+compute similarity measures between them. It includes an enumeration for different similarity
 measures and methods to calculate these measures from PDFs or directly from data sets.
 """
 import enum
@@ -33,7 +33,6 @@ def estimate_pdf(window1: np.array, window2: np.array, n_bins: int) -> \
     x2_dist, _ = np.histogram(window2, bins=bins, density=True)
 
     return x1_dist, x2_dist, edges
-
 
 def plot_pdf(output_filename: str, window1: np.array, window2: np.array, n_bins: int,
              title1: str = "Window 1", title2: str = "Window 2") -> None:
