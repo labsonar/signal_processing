@@ -434,7 +434,7 @@ class SpectralAnalysis(enum.Enum):
         group.add_argument(
             "--spectral-analysis",
             type=str,
-            default=SpectralAnalysis.LOFAR.name,
+            default=SpectralAnalysis.MELGRAM.name,
             choices=[e.name for e in SpectralAnalysis],
             help="Spectral representation type."
         )
@@ -442,7 +442,7 @@ class SpectralAnalysis(enum.Enum):
         group.add_argument(
             "--spectral-n-pts",
             type=int,
-            default=1024,
+            default=4096,
             help="FFT size."
         )
 
@@ -456,7 +456,7 @@ class SpectralAnalysis(enum.Enum):
         group.add_argument(
             "--spectral-n-mels",
             type=int,
-            default=256,
+            default=512,
             help="Number of mel bins."
         )
 
